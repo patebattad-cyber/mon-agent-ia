@@ -69,7 +69,7 @@ function init() {
   }
 
   // Restore model selection in settings UI
-  const savedModel = localStorage.getItem(LS_KEY_MODEL) || 'claude-sonnet-4-6';
+  const savedModel = localStorage.getItem(LS_KEY_MODEL) || 'gemini-2.5-flash';
   document.querySelectorAll('.select-chip').forEach(chip => {
     chip.classList.toggle('active', chip.dataset.model === savedModel);
   });
@@ -422,19 +422,24 @@ async function send() {
 
   showTyping();
 
-  const model = localStorage.getItem(LS_KEY_MODEL) || 'claude-sonnet-4-6';
-  const apiMessages = conv.messages.map(m => ({ role: m.role === 'ai' ? 'assistant' : m.role, content: m.content }));
+  const model = localStorage.getItem(LS_KEY_MODEL) || 'gemini-2.5-flash';
+
+  // Gemini format: roles are "user" / "model", history mapped from our "ai" role
+  const contents = conv.messages.map(m => ({
+    role: m.role === 'ai' ? 'model' : 'user',
+    parts: [{ text: m.content }]
+  }));
 
   const body = {
-    model: model,
-    max_tokens: 2000,
-    system: systemPrompts[activeMode] || systemPrompts.general,
-    messages: apiMessages,
-    stream: true
+    contents: contents,
+    systemInstruction: {
+      parts: [{ text: systemPrompts[activeMode] || systemPrompts.general }]
+    },
+    generationConfig: { maxOutputTokens: 2000 }
   };
 
   if (activeMode === 'web') {
-    body.tools = [{ type: 'web_search_20250305', name: 'web_search' }];
+    body.tools = [{ google_search: {} }];
   }
 
   abortController = new AbortController();
@@ -442,14 +447,10 @@ async function send() {
   let fullText = '';
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${encodeURIComponent(apiKey)}`;
+    const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
       signal: abortController.signal
     });
@@ -476,11 +477,12 @@ async function send() {
       for (const line of lines) {
         if (!line.startsWith('data: ')) continue;
         const dataStr = line.slice(6);
-        if (dataStr === '[DONE]') continue;
+        if (!dataStr || dataStr === '[DONE]') continue;
         try {
           const evt = JSON.parse(dataStr);
-          if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta') {
-            fullText += evt.delta.text;
+          const piece = evt?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (piece) {
+            fullText += piece;
             bubble.innerHTML = formatText(fullText);
             chat.scrollTop = chat.scrollHeight;
           }
@@ -505,8 +507,11 @@ async function send() {
         saveConversations();
       }
     } else {
-      const msg = err.message.includes('401') || err.message.toLowerCase().includes('authentication')
+      const lower = err.message.toLowerCase();
+      const msg = (lower.includes('api key') || lower.includes('401') || lower.includes('permission') || lower.includes('invalid'))
         ? '⚠️ Clé API invalide. Vérifie-la dans Paramètres.'
+        : lower.includes('quota') || lower.includes('429') || lower.includes('resource_exhausted')
+        ? '⚠️ Limite quotidienne gratuite atteinte. Réessaie plus tard ou demain.'
         : `⚠️ Erreur : ${err.message}`;
       appendMessage('ai', msg, Date.now());
     }
@@ -550,8 +555,8 @@ input.addEventListener('keydown', (e) => {
 // ===================== ONBOARDING =====================
 $('onboardSaveBtn').addEventListener('click', () => {
   const key = $('onboardKeyInput').value.trim();
-  if (!key.startsWith('sk-ant-')) {
-    showToast('⚠️ Clé invalide — doit commencer par sk-ant-');
+  if (key.length < 15) {
+    showToast('⚠️ Clé invalide — copie-la entièrement');
     return;
   }
   localStorage.setItem(LS_KEY_API, key);
