@@ -721,11 +721,11 @@
 <div class="onboarding" id="onboarding" style="display:none;">
   <div class="onboarding-icon">⚡</div>
   <h1>Bienvenue sur l'assistant IA développé par Dieu Donné</h1>
-  <p>Pour démarrer, connecte ta clé API Anthropic personnelle. Elle reste stockée uniquement sur ton téléphone, jamais partagée.</p>
+  <p>Pour démarrer, connecte ta clé API Google Gemini personnelle (gratuite). Elle reste stockée uniquement sur ton téléphone, jamais partagée.</p>
   <div class="onboarding-form">
-    <input type="password" class="field-input" id="onboardKeyInput" placeholder="sk-ant-...">
+    <input type="password" class="field-input" id="onboardKeyInput" placeholder="AIzaSy...">
     <div class="api-help">
-      Pas encore de clé ? Crée-en une gratuitement sur <a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com</a> → "Create Key".
+      Pas encore de clé ? Crée-en une gratuitement sur <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com</a> → "Get API key" → "Create API key". Aucune carte bancaire requise.
     </div>
     <button class="modal-btn primary" id="onboardSaveBtn">Commencer</button>
   </div>
@@ -798,14 +798,14 @@
     <div class="modal-title">Paramètres</div>
     <div class="modal-subtitle">Gère ta clé API et les préférences de ton agent.</div>
 
-    <label class="field-label">Clé API Anthropic</label>
-    <input type="password" class="field-input" id="apiKeyInput" placeholder="sk-ant-...">
+    <label class="field-label">Clé API Google Gemini</label>
+    <input type="password" class="field-input" id="apiKeyInput" placeholder="AIzaSy...">
 
     <label class="field-label">Modèle</label>
     <div class="select-row" id="modelSelect">
-      <div class="select-chip" data-model="claude-haiku-4-5-20251001">Haiku (rapide)</div>
-      <div class="select-chip active" data-model="claude-sonnet-4-6">Sonnet (équilibré)</div>
-      <div class="select-chip" data-model="claude-opus-4-6">Opus (puissant)</div>
+      <div class="select-chip" data-model="gemini-2.5-flash-lite">Flash-Lite (rapide)</div>
+      <div class="select-chip active" data-model="gemini-2.5-flash">Flash (équilibré)</div>
+      <div class="select-chip" data-model="gemini-2.5-pro">Pro (puissant, limité)</div>
     </div>
 
     <button class="modal-btn primary" id="saveSettingsBtn">Enregistrer</button>
