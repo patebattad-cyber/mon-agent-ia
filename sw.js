@@ -1,4 +1,4 @@
-const CACHE_NAME = 'agent-ia-v1';
+const CACHE_NAME = 'agent-ia-v2';
 const ASSETS = [
   './index.html',
   './manifest.json',
@@ -22,20 +22,23 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+// Network-first: always try to fetch the latest version online.
+// Only fall back to the cached copy if the network request fails (offline).
 self.addEventListener('fetch', (event) => {
-  // Never cache API calls — always go to network
-  if (event.request.url.includes('api.anthropic.com')) {
-    return;
+  if (event.request.url.includes('generativelanguage.googleapis.com')) {
+    return; // never cache API calls
   }
+  if (event.request.method !== 'GET') return;
+
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      return cached || fetch(event.request).then((response) => {
-        if (response && response.status === 200 && event.request.method === 'GET') {
+    fetch(event.request)
+      .then((response) => {
+        if (response && response.status === 200) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         }
         return response;
-      }).catch(() => cached);
-    })
+      })
+      .catch(() => caches.match(event.request))
   );
 });

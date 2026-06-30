@@ -555,8 +555,8 @@ input.addEventListener('keydown', (e) => {
 // ===================== ONBOARDING =====================
 $('onboardSaveBtn').addEventListener('click', () => {
   const key = $('onboardKeyInput').value.trim();
-  if (!key.startsWith('AIza')) {
-    showToast('⚠️ Clé invalide — doit commencer par AIza');
+  if (key.length < 15) {
+    showToast('⚠️ Clé invalide — copie-la entièrement');
     return;
   }
   localStorage.setItem(LS_KEY_API, key);
