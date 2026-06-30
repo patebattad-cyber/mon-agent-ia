@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sentinel — Tableau de bord sécurité</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0B1426;
+    --bg-soft: #121E36;
+    --panel: #16223D;
+    --line: #243352;
+    --text: #F5F3EE;
+    --text-dim: #9AA8C7;
+    --accent: #2DD4BF;
+    --accent-dim: #1B4B47;
+    --danger: #FF6B6B;
+    --danger-dim: #4A2424;
+    --warn: #FFC857;
+  }
+
+  *{ margin:0; padding:0; box-sizing:border-box; }
+  html{ scroll-behavior:smooth; }
+
+  body{
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+    padding-bottom: 80px;
+  }
+
+  body::before{
+    content:'';
+    position:fixed; inset:0;
+    background-image:
+      linear-gradient(rgba(45,212,191,0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(45,212,191,0.035) 1px, transparent 1px);
+    background-size: 48px 48px;
+    pointer-events:none;
+    z-index:0;
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 40%, transparent 100%);
+  }
+
+  .wrap{ position:relative; z-index:1; max-width: 960px; margin:0 auto; padding: 0 24px; }
+
+  /* Header */
+  header{ padding: 24px 0 12px; display:flex; align-items:center; justify-content:space-between; }
+  .logo{ display:flex; align-items:center; gap:10px; font-family:'Space Grotesk', sans-serif; font-weight:700; font-size:1.15rem; letter-spacing:0.02em; }
+  .logo-mark{ width:28px; height:28px; border:2px solid var(--accent); border-radius:6px; display:flex; align-items:center; justify-content:center; position:relative; }
+  .logo-mark::after{ content:''; width:8px; height:8px; background:var(--accent); border-radius:50%; box-shadow: 0 0 8px var(--accent); }
+  .eyebrow{ font-family:'JetBrains Mono', monospace; font-size:0.7rem; letter-spacing:0.18em; text-transform:uppercase; color:var(--accent); }
+
+  /* Hero / score */
+  .hero{ padding: 32px 0 8px; }
+  .hero-top{ display:flex; align-items:flex-end; justify-content:space-between; gap:24px; flex-wrap:wrap; }
+  .hero h1{
+    font-family:'Space Grotesk', sans-serif; font-weight:700;
+    font-size: clamp(1.8rem, 5vw, 2.6rem); line-height:1.1; letter-spacing:-0.02em;
+  }
+  .hero p.sub{ color: var(--text-dim); font-size: 0.95rem; max-width: 460px; margin-top:8px; }
+
+  /* Score ring */
+  .score-card{
+    background: var(--panel); border:1px solid var(--line); border-radius:16px;
+    padding: 20px 24px; display:flex; align-items:center; gap:18px; min-width: 220px;
+  }
+  .score-ring{ position:relative; width:78px; height:78px; flex-shrink:0; }
+  .score-ring svg{ transform: rotate(-90deg); }
+  .score-ring circle{ fill:none; stroke-width:8; }
+  .score-ring .track{ stroke: var(--line); }
+  .score-ring .fill{ stroke: var(--accent); stroke-linecap:round; transition: stroke-dashoffset 0.6s ease, stroke 0.4s ease; }
+  .score-ring .num{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-family:'Space Grotesk', sans-serif; font-weight:700; font-size:1.3rem;
+  }
+  .score-text .label{ font-family:'JetBrains Mono', monospace; font-size:0.7rem; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-dim); }
+  .score-text .status{ font-family:'Space Grotesk', sans-serif; font-weight:600; font-size:1.05rem; margin-top:4px; }
+
+  /* Nav tabs */
+  .nav{ display:flex; gap:6px; margin: 28px 0 24px; background:var(--bg-soft); padding:5px; border-radius:12px; overflow-x:auto; }
+  .nav button{
+    flex:1; min-width:max-content; text-align:center; padding:11px 18px; border-radius:9px;
+    font-family:'JetBrains Mono', monospace; font-size:0.78rem; letter-spacing:0.04em;
+    color: var(--text-dim); cursor:pointer; border:none; background:transparent;
+    transition: all 0.2s ease; white-space:nowrap;
+  }
+  .nav button.active{ background: var(--panel); color: var(--accent); }
+
+  .section{ display:none; animation: fadeIn 0.35s ease; }
+  .section.active{ display:block; }
+  @keyframes fadeIn{ from{ opacity:0; transform: translateY(6px); } to{ opacity:1; transform:translateY(0); } }
+
+  /* Generic panel */
+  .panel{
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    padding: 28px; margin-bottom: 18px; position:relative; overflow:hidden;
+  }
+  .panel h2{ font-family:'Space Grotesk', sans-serif; font-size:1.2rem; font-weight:600; margin-bottom:6px; }
+  .panel > p.desc{ color: var(--text-dim); font-size:0.9rem; margin-bottom:22px; }
+
+  .scan-beam{
+    position:absolute; top:0; left:-100%; width:60%; height:100%;
+    background: linear-gradient(90deg, transparent, rgba(45,212,191,0.18), transparent);
+    pointer-events:none;
+  }
+  .scanning .scan-beam{ animation: sweep 1.1s linear infinite; }
+  @keyframes sweep{ to{ left:140%; } }
+
+  .field-label{
+    font-family:'JetBrains Mono', monospace; font-size:0.72rem; letter-spacing:0.12em;
+    text-transform:uppercase; color:var(--text-dim); display:block; margin-bottom:10px;
+  }
+  .input-row{ display:flex; gap:10px; }
+  input[type="text"], input[type="password"], input[type="email"]{
+    flex:1; background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+    padding: 14px 16px; color: var(--text); font-family:'JetBrains Mono', monospace;
+    font-size: 0.95rem; outline:none; transition: border-color 0.2s ease; width:100%;
+  }
+  input:focus{ border-color: var(--accent); }
+  input::placeholder{ color: #5A6B8C; }
+
+  .toggle-visibility{
+    background: var(--bg); border:1px solid var(--line); border-radius:8px;
+    color: var(--text-dim); padding: 0 16px; cursor:pointer; font-family:'JetBrains Mono', monospace;
+    font-size:0.72rem; letter-spacing:0.05em; transition: all 0.2s ease;
+  }
+  .toggle-visibility:hover{ color:var(--accent); border-color: var(--accent); }
+
+  .btn{
+    margin-top: 16px; width:100%; background: var(--accent); color: #06241F; border:none;
+    border-radius: 8px; padding: 15px; font-family:'Space Grotesk', sans-serif; font-weight:600;
+    font-size: 0.98rem; letter-spacing: 0.01em; cursor:pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .btn:hover{ box-shadow: 0 4px 20px rgba(45,212,191,0.3); transform: translateY(-1px); }
+  .btn:active{ transform: translateY(0); }
+  .btn:disabled{ opacity:0.6; cursor:wait; }
+  .btn.secondary{ background:transparent; border:1px solid var(--line); color:var(--text); box-shadow:none; }
+  .btn.secondary:hover{ border-color: var(--accent); color:var(--accent); box-shadow:none; }
+
+  .result{
+    margin-top: 18px; border-radius: 10px; padding: 20px; border: 1px solid var(--line);
+    display:none; animation: fadeIn 0.35s ease;
+  }
+  .result.show{ display:block; }
+  .result.safe{ border-color: var(--accent); background: rgba(45,212,191,0.06); }
+  .result.danger{ border-color: var(--danger); background: rgba(255,107,107,0.06); }
+  .result.info{ border-color: var(--warn); background: rgba(255,200,87,0.06); }
+  .result-head{ display:flex; align-items:center; gap:10px; font-family:'Space Grotesk', sans-serif; font-weight:600; font-size:1.05rem; margin-bottom:8px; }
+  .result.safe .result-head{ color: var(--accent); }
+  .result.danger .result-head{ color: var(--danger); }
+  .result.info .result-head{ color: var(--warn); }
+  .result p{ color: var(--text-dim); font-size:0.92rem; }
+  .result ul{ color: var(--text-dim); font-size:0.92rem; margin-top:8px; padding-left:20px; }
+  .result .count{ font-family:'JetBrains Mono', monospace; font-weight:700; color:var(--text); }
+
+  .badge-demo{
+    display:inline-block; font-family:'JetBrains Mono', monospace; font-size:0.65rem;
+    letter-spacing:0.1em; text-transform:uppercase; color: var(--warn);
+    border:1px solid var(--warn); border-radius:4px; padding:2px 8px; margin-left:8px; vertical-align: middle;
+  }
+
+  /* Generator */
+  .pw-display{
+    background: var(--bg); border:1px solid var(--line); border-radius:8px; padding: 18px;
+    font-family:'JetBrains Mono', monospace; font-size:1.1rem; letter-spacing:0.08em;
+    word-break:break-all; color:var(--accent); display:flex; align-items:center; justify-content:space-between; gap:12px;
+  }
+  .pw-display button{
+    background:transparent; border:1px solid var(--line); color:var(--text-dim); border-radius:6px;
+    padding:8px 14px; font-family:'JetBrains Mono', monospace; font-size:0.72rem; cursor:pointer;
+    white-space:nowrap; transition:all 0.2s ease;
+  }
+  .pw-display button:hover{ color:var(--accent); border-color:var(--accent); }
+
+  .controls{ margin-top:20px; display:grid; gap:16px; }
+  .slider-row{ display:flex; align-items:center; justify-content:space-between; }
+  .slider-row label{ font-size:0.9rem; color:var(--text-dim); }
+  .slider-row .val{ font-family:'JetBrains Mono', monospace; color:var(--accent); font-weight:700; }
+  input[type="range"]{ width:100%; appearance:none; height:4px; background:var(--line); border-radius:2px; margin-top:8px; }
+  input[type="range"]::-webkit-slider-thumb{
+    appearance:none; width:18px; height:18px; border-radius:50%; background:var(--accent); cursor:pointer; box-shadow:0 0 0 4px rgba(45,212,191,0.15);
+  }
+  .checks-grid{ display:grid; grid-template-columns: repeat(2,1fr); gap:12px; margin-top:4px; }
+  .check{ display:flex; align-items:center; gap:8px; font-size:0.88rem; color:var(--text-dim); cursor:pointer; }
+  .check input{ accent-color:var(--accent); width:16px; height:16px; }
+
+  .strength{ margin-top:14px; }
+  .strength-bar{ height:6px; background:var(--bg); border-radius:3px; overflow:hidden; }
+  .strength-fill{ height:100%; width:0%; background:var(--danger); transition: all 0.4s ease; border-radius:3px; }
+  .strength-label{ font-family:'JetBrains Mono', monospace; font-size:0.72rem; letter-spacing:0.1em; text-transform:uppercase; color:var(--text-dim); margin-top:8px; display:block; }
+
+  /* Exposure section */
+  .exposure-grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(210px,1fr)); gap:14px; margin-top:20px; }
+  .exposure-card{
+    background: var(--bg); border:1px solid var(--line); border-radius:12px; padding:20px;
+    transition: border-color 0.3s ease;
+  }
+  .exposure-card.loaded{ border-color: var(--accent); }
+  .exp-label{ font-family:'JetBrains Mono', monospace; font-size:0.7rem; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-dim); margin-bottom:10px; }
+  .exp-value{ font-family:'Space Grotesk', sans-serif; font-size:1.2rem; font-weight:700; color:var(--accent); margin-bottom:6px; min-height:28px; }
+  .exp-value.loading{ color:var(--text-dim); font-size:0.9rem; font-weight:400; }
+  .exp-value.danger{ color: var(--danger); }
+  .exp-value.safe{ color: var(--accent); }
+  .exp-note{ font-size:0.8rem; color:var(--text-dim); }
+
+  /* Social checklist */
+  .platform-list{ display:grid; gap:12px; }
+  .platform{
+    background: var(--bg); border:1px solid var(--line); border-radius:12px; padding: 16px 18px;
+  }
+  .platform-head{ display:flex; align-items:center; justify-content:space-between; cursor:pointer; }
+  .platform-name{ display:flex; align-items:center; gap:12px; font-family:'Space Grotesk', sans-serif; font-weight:600; }
+  .platform-icon{
+    width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center;
+    font-size:0.85rem; font-weight:700; font-family:'Space Grotesk', sans-serif; flex-shrink:0;
+  }
+  .platform-progress{ font-family:'JetBrains Mono', monospace; font-size:0.8rem; color:var(--text-dim); }
+  .platform-progress.complete{ color: var(--accent); }
+  .platform-items{ margin-top:14px; display:none; flex-direction:column; gap:10px; padding-top:14px; border-top:1px solid var(--line); }
+  .platform.open .platform-items{ display:flex; }
+  .platform-items label{ display:flex; align-items:flex-start; gap:10px; font-size:0.88rem; color:var(--text-dim); cursor:pointer; }
+  .platform-items label:hover{ color:var(--text); }
+  .platform-items input{ accent-color:var(--accent); width:16px; height:16px; margin-top:2px; flex-shrink:0; }
+  .chevron{ color:var(--text-dim); transition: transform 0.2s ease; font-size:0.8rem; }
+  .platform.open .chevron{ transform: rotate(180deg); }
+
+  /* Link analyzer */
+  .signal-list{ display:flex; flex-direction:column; gap:10px; margin-top:14px; }
+  .signal{ display:flex; align-items:flex-start; gap:10px; font-size:0.9rem; padding:12px 14px; border-radius:8px; border:1px solid var(--line); }
+  .signal.flag{ border-color: var(--danger); background: rgba(255,107,107,0.06); color: var(--text); }
+  .signal.ok{ border-color: var(--accent); background: rgba(45,212,191,0.06); color: var(--text); }
+  .signal .icon{ flex-shrink:0; }
+
+  /* Dashboard overview cards */
+  .overview-grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap:14px; margin-bottom:18px; }
+  .overview-card{ background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:20px; }
+  .overview-card .eyebrow{ display:block; margin-bottom:8px; }
+  .overview-card h3{ font-family:'Space Grotesk', sans-serif; font-size:1.4rem; font-weight:700; margin-bottom:4px; }
+  .overview-card p{ color:var(--text-dim); font-size:0.85rem; }
+  .overview-card.attention h3{ color: var(--danger); }
+  .overview-card.good h3{ color: var(--accent); }
+
+  /* Tips */
+  .tip-grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap:14px; }
+  .tip{ background:var(--bg); border:1px solid var(--line); border-radius:12px; padding:20px; }
+  .tip .num{ font-family:'JetBrains Mono', monospace; color:var(--accent); font-size:0.75rem; letter-spacing:0.1em; }
+  .tip h3{ font-family:'Space Grotesk', sans-serif; font-size:1rem; font-weight:600; margin:8px 0 6px; }
+  .tip p{ color:var(--text-dim); font-size:0.88rem; }
+
+  footer{ text-align:center; padding: 40px 0 0; color:var(--text-dim); font-size:0.8rem; font-family:'JetBrains Mono', monospace; }
+  footer a{ color: var(--accent); text-decoration:none; }
+
+  @media (max-width: 600px){
+    .checks-grid{ grid-template-columns: 1fr; }
+    .panel{ padding:20px; }
+    .input-row{ flex-direction:column; }
+    .hero-top{ flex-direction:column; align-items:flex-start; }
+    .score-card{ width:100%; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    html{ scroll-behavior:auto; }
+    .scanning .scan-beam{ animation:none; }
+    .section, .result{ animation:none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header>
+    <div class="logo">
+      <div class="logo-mark"></div>
+      Sentinel
+    </div>
+    <div class="eyebrow">Tableau de bord</div>
+  </header>
+
+  <section class="hero">
+    <div class="hero-top">
+      <div>
+        <div class="eyebrow">Vue d'ensemble</div>
+        <h1>Ton score de sécurité</h1>
+        <p class="sub">Calculé à partir des vérifications et de la checklist ci-dessous. Plus tu coches et vérifies, plus il monte.</p>
+      </div>
+      <div class="score-card">
+        <div class="score-ring">
+          <svg width="78" height="78" viewBox="0 0 78 78">
+            <circle class="track" cx="39" cy="39" r="34"></circle>
+            <circle class="fill" id="scoreCircle" cx="39" cy="39" r="34" stroke-dasharray="213.6" stroke-dashoffset="213.6"></circle>
+          </svg>
+          <div class="num" id="scoreNum">0</div>
+        </div>
+        <div class="score-text">
+          <div class="label">Score global</div>
+          <div class="status" id="scoreStatus">À évaluer</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Nav -->
+  <nav class="nav">
+    <button class="active" data-section="overview">Vue d'ensemble</button>
+    <button data-section="leaks">Fuites</button>
+    <button data-section="exposure">Mon exposition</button>
+    <button data-section="social">Réseaux sociaux</button>
+    <button data-section="links">Liens suspects</button>
+    <button data-section="generator">Générateur</button>
+  </nav>
+
+  <!-- OVERVIEW -->
+  <section class="section active" id="section-overview">
+    <div class="overview-grid">
+      <div class="overview-card" id="ovLeaks">
+        <span class="eyebrow">Fuites de données</span>
+        <h3>Pas encore testé</h3>
+        <p>Vérifie ton mot de passe et ton e-mail dans l'onglet "Fuites".</p>
+      </div>
+      <div class="overview-card" id="ovSocial">
+        <span class="eyebrow">Réseaux sociaux</span>
+        <h3 id="ovSocialCount">0 / 0</h3>
+        <p>Cases cochées dans la checklist par plateforme.</p>
+      </div>
+      <div class="overview-card" id="ovLinks">
+        <span class="eyebrow">Liens analysés</span>
+        <h3 id="ovLinksCount">0</h3>
+        <p>Liens vérifiés avec l'analyseur de signaux.</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Par où commencer ?</h2>
+      <p class="desc">Trois actions simples qui ont le plus d'impact sur ta sécurité, dans l'ordre.</p>
+      <div class="tip-grid">
+        <div class="tip">
+          <div class="num">01</div>
+          <h3>Vérifie ton mot de passe principal</h3>
+          <p>Va dans "Fuites" et teste le mot de passe que tu utilises le plus. S'il est compromis, change-le partout, en commençant par ton e-mail.</p>
+        </div>
+        <div class="tip">
+          <div class="num">02</div>
+          <h3>Active la double authentification</h3>
+          <p>Coche les cases dans "Réseaux sociaux" au fur et à mesure que tu actives le 2FA sur chaque appli.</p>
+        </div>
+        <div class="tip">
+          <div class="num">03</div>
+          <h3>Génère un mot de passe pour chaque compte</h3>
+          <p>Utilise le générateur pour remplacer les mots de passe réutilisés par des mots de passe uniques et stockés dans un gestionnaire.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- LEAKS -->
+  <section class="section" id="section-leaks">
+    <div class="panel" id="scanner">
+      <div class="scan-beam"></div>
+      <h2>Vérifie tes mots de passe et ton e-mail</h2>
+      <p class="desc">Le mot de passe est vérifié en direct via l'API publique Pwned Passwords, sans jamais envoyer ton mot de passe en clair.</p>
+
+      <span class="field-label">Mot de passe à vérifier</span>
+      <div class="input-row">
+        <input type="password" id="pwInput" placeholder="••••••••••••" autocomplete="off">
+        <button class="toggle-visibility" id="toggleBtn">Afficher</button>
+      </div>
+      <button class="btn" id="checkPwBtn">Vérifier ce mot de passe</button>
+      <div class="result" id="pwResult"></div>
+
+      <div style="height:24px"></div>
+
+      <span class="field-label">Adresse e-mail à vérifier <span class="badge-demo">Démo</span></span>
+      <div class="input-row">
+        <input type="email" id="emailInput" placeholder="toi@exemple.com" autocomplete="off">
+      </div>
+      <button class="btn secondary" id="checkEmailBtn">Vérifier cette adresse</button>
+      <div class="result" id="emailResult"></div>
+    </div>
+  </section>
+
+  <!-- EXPOSURE -->
+  <section class="section" id="section-exposure">
+    <div class="panel" id="exposurePanel">
+      <div class="scan-beam"></div>
+      <h2>Mon exposition en ligne</h2>
+      <p class="desc">Voici ce que n'importe quel site web peut voir de ton appareil dès que tu te connectes, sans que tu le saches.</p>
+      <button class="btn" id="scanExposureBtn">Analyser mon exposition</button>
+
+      <div id="exposureResult" style="display:none; margin-top:24px;">
+        <div class="exposure-grid">
+
+          <div class="exposure-card" id="expIp">
+            <div class="exp-label">Adresse IP publique</div>
+            <div class="exp-value" id="expIpVal">—</div>
+            <div class="exp-note">Visible par tous les sites que tu visites</div>
+          </div>
+
+          <div class="exposure-card" id="expCity">
+            <div class="exp-label">Localisation détectée</div>
+            <div class="exp-value" id="expCityVal">—</div>
+            <div class="exp-note">Ville et pays estimés depuis l'IP</div>
+          </div>
+
+          <div class="exposure-card" id="expIsp">
+            <div class="exp-label">Fournisseur internet (FAI)</div>
+            <div class="exp-value" id="expIspVal">—</div>
+            <div class="exp-note">Ton opérateur réseau est identifiable</div>
+          </div>
+
+          <div class="exposure-card" id="expVpn">
+            <div class="exp-label">VPN / Proxy détecté</div>
+            <div class="exp-value" id="expVpnVal">—</div>
+            <div class="exp-note">Indique si ton trafic est masqué</div>
+          </div>
+
+        </div>
+
+        <div class="result show info" style="margin-top:20px;" id="expAdvice">
+          <div class="result-head">💡 Ce que ça signifie</div>
+          <p id="expAdviceText">Analyse en cours...</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SOCIAL -->
+  <section class="section" id="section-social">
+    <div class="panel">
+      <h2>Checklist par réseau social</h2>
+      <p class="desc">Coche au fur et à mesure que tu sécurises chaque application. Ta progression est comptée dans le score global.</p>
+      <div class="platform-list" id="platformList"></div>
+    </div>
+  </section>
+
+  <!-- LINKS -->
+  <section class="section" id="section-links">
+    <div class="panel" id="linkPanel">
+      <div class="scan-beam"></div>
+      <h2>Analyseur de lien suspect</h2>
+      <p class="desc">Colle un lien reçu par message ou e-mail. L'analyse repère des signaux d'alerte classiques (sans visiter le lien).</p>
+
+      <span class="field-label">Lien à analyser</span>
+      <div class="input-row">
+        <input type="text" id="linkInput" placeholder="https://exemple.com/...">
+      </div>
+      <button class="btn" id="checkLinkBtn">Analyser ce lien</button>
+      <div class="result" id="linkResult"></div>
+    </div>
+  </section>
+
+  <!-- GENERATOR -->
+  <section class="section" id="section-generator">
+    <div class="panel">
+      <h2>Générateur de mot de passe</h2>
+      <p class="desc">Crée un mot de passe fort et unique pour chaque compte.</p>
+
+      <div class="pw-display">
+        <span id="genOutput">Clique pour générer</span>
+        <button id="copyBtn">Copier</button>
+      </div>
+
+      <div class="strength">
+        <div class="strength-bar"><div class="strength-fill" id="strengthFill"></div></div>
+        <span class="strength-label" id="strengthLabel">—</span>
+      </div>
+
+      <div class="controls">
+        <div class="slider-row">
+          <label>Longueur</label>
+          <span class="val" id="lenVal">16</span>
+        </div>
+        <input type="range" id="lenSlider" min="8" max="32" value="16">
+
+        <div class="checks-grid">
+          <label class="check"><input type="checkbox" id="optUpper" checked> Majuscules (A–Z)</label>
+          <label class="check"><input type="checkbox" id="optNum" checked> Chiffres (0–9)</label>
+          <label class="check"><input type="checkbox" id="optLower" checked> Minuscules (a–z)</label>
+          <label class="check"><input type="checkbox" id="optSym" checked> Symboles (!@#$)</label>
+        </div>
+
+        <button class="btn" id="genBtn">Générer un mot de passe</button>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Prototype — vérification des mots de passe via l'API publique <a href="https://haveibeenpwned.com/Passwords" target="_blank">Pwned Passwords</a>. Données stockées uniquement dans ce navigateur.
+  </footer>
+
+</div>
+
+<script>
+  /* ---------- State ---------- */
+  const state = {
+    leaksChecked: false,
+    leaksSafe: null, // true/false
+    linksChecked: 0,
+    socialChecks: {} // platformId -> Set of checked item indices
+  };
+
+  /* ---------- Navigation ---------- */
+  document.querySelectorAll('.nav button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('section-' + btn.dataset.section).classList.add('active');
+    });
+  });
+
+  /* ---------- Score calculation ---------- */
+  function computeScore(){
+    let score = 0;
+    let max = 0;
+
+    // Leak check: 25 pts if safe, 0 if unsafe, not counted if untested
+    max += 25;
+    if(state.leaksChecked){
+      score += state.leaksSafe ? 25 : 0;
+    }
+
+    // Social checklist: 50 pts proportional
+    let totalItems = 0, checkedItems = 0;
+    platforms.forEach(p => {
+      totalItems += p.items.length;
+      checkedItems += (state.socialChecks[p.id] ? state.socialChecks[p.id].size : 0);
+    });
+    max += 50;
+    if(totalItems > 0){
+      score += Math.round((checkedItems/totalItems) * 50);
+    }
+
+    // Link analysis usage: 25 pts if used at least once safely-ish (just for engagement)
+    max += 25;
+    if(state.linksChecked > 0) score += 25;
+
+    const pct = Math.round((score/max) * 100);
+    updateScoreUI(pct);
+
+    // Update overview
+    document.getElementById('ovSocialCount').textContent = `${checkedItems} / ${totalItems}`;
+    document.getElementById('ovLinksCount').textContent = state.linksChecked;
+
+    const ovLeaks = document.getElementById('ovLeaks');
+    if(!state.leaksChecked){
+      ovLeaks.className = 'overview-card';
+      ovLeaks.querySelector('h3').textContent = 'Pas encore testé';
+    } else if(state.leaksSafe){
+      ovLeaks.className = 'overview-card good';
+      ovLeaks.querySelector('h3').textContent = 'Aucune fuite détectée';
+    } else {
+      ovLeaks.className = 'overview-card attention';
+      ovLeaks.querySelector('h3').textContent = 'Action requise';
+    }
+  }
+
+  function updateScoreUI(pct){
+    const circle = document.getElementById('scoreCircle');
+    const circumference = 2 * Math.PI * 34;
+    const offset = circumference - (pct/100) * circumference;
+    circle.style.strokeDasharray = circumference;
+    circle.style.strokeDashoffset = offset;
+
+    document.getElementById('scoreNum').textContent = pct;
+
+    let status = 'À améliorer';
+    let color = 'var(--danger)';
+    if(pct >= 80){ status = 'Excellent'; color = 'var(--accent)'; }
+    else if(pct >= 50){ status = 'Correct'; color = 'var(--warn)'; }
+
+    circle.style.stroke = color;
+    document.getElementById('scoreStatus').textContent = status;
+    document.getElementById('scoreStatus').style.color = color;
+  }
+
+  /* ---------- Leak checker ---------- */
+  const pwInput = document.getElementById('pwInput');
+  const toggleBtn = document.getElementById('toggleBtn');
+  toggleBtn.addEventListener('click', () => {
+    const isPassword = pwInput.type === 'password';
+    pwInput.type = isPassword ? 'text' : 'password';
+    toggleBtn.textContent = isPassword ? 'Cacher' : 'Afficher';
+  });
+
+  async function sha1(str){
+    const buf = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(str));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('').toUpperCase();
+  }
+
+  const scanner = document.getElementById('scanner');
+  const checkPwBtn = document.getElementById('checkPwBtn');
+  const pwResult = document.getElementById('pwResult');
+
+  checkPwBtn.addEventListener('click', async () => {
+    const pw = pwInput.value;
+    if(!pw){
+      showResult(pwResult, 'info', '⚠ Entre un mot de passe', 'Le champ est vide pour le moment.');
+      return;
+    }
+
+    checkPwBtn.disabled = true;
+    checkPwBtn.textContent = 'Analyse en cours...';
+    scanner.classList.add('scanning');
+
+    try{
+      const hash = await sha1(pw);
+      const prefix = hash.slice(0,5);
+      const suffix = hash.slice(5);
+
+      const res = await fetch(`https://api.pwnedpasswords.com/range/${prefix}`);
+      const text = await res.text();
+
+      const lines = text.split('\n');
+      let count = 0;
+      for(const line of lines){
+        const [hashSuffix, num] = line.trim().split(':');
+        if(hashSuffix === suffix){
+          count = parseInt(num, 10);
+          break;
+        }
+      }
+
+      state.leaksChecked = true;
+
+      if(count > 0){
+        state.leaksSafe = false;
+        showResult(pwResult, 'danger', '⚠ Mot de passe compromis',
+          `Ce mot de passe est apparu <span class="count">${count.toLocaleString('fr-FR')}</span> fois dans des fuites de données connues. Change-le partout où tu l'utilises, en commençant par ton compte e-mail.`);
+      } else {
+        state.leaksSafe = true;
+        showResult(pwResult, 'safe', '✓ Aucune fuite détectée',
+          `Ce mot de passe n'apparaît dans aucune fuite connue. Vérifie quand même qu'il est unique et assez long.`);
+      }
+      computeScore();
+    } catch(err){
+      showResult(pwResult, 'info', '⚠ Vérification impossible', `La connexion au service de vérification a échoué. Réessaie plus tard.`);
+    } finally {
+      checkPwBtn.disabled = false;
+      checkPwBtn.textContent = 'Vérifier ce mot de passe';
+      scanner.classList.remove('scanning');
+    }
+  });
+
+  const checkEmailBtn = document.getElementById('checkEmailBtn');
+  const emailResult = document.getElementById('emailResult');
+  const emailInput = document.getElementById('emailInput');
+
+  checkEmailBtn.addEventListener('click', () => {
+    const email = emailInput.value.trim();
+    if(!email || !email.includes('@')){
+      showResult(emailResult, 'info', '⚠ Adresse invalide', 'Entre une adresse e-mail valide.');
+      return;
+    }
+
+    checkEmailBtn.disabled = true;
+    checkEmailBtn.textContent = 'Analyse en cours...';
+    scanner.classList.add('scanning');
+
+    setTimeout(() => {
+      const hashCode = email.split('').reduce((a,c) => a + c.charCodeAt(0), 0);
+      const isCompromised = hashCode % 2 === 0;
+
+      if(isCompromised){
+        showResult(emailResult, 'danger', '⚠ Résultat de démonstration',
+          `Dans une vraie vérification, cette adresse pourrait apparaître dans une ou plusieurs fuites connues. En production, ce service utiliserait l'API officielle Have I Been Pwned pour un résultat réel.`);
+      } else {
+        showResult(emailResult, 'safe', '✓ Résultat de démonstration',
+          `Dans une vraie vérification, cette adresse n'apparaîtrait dans aucune fuite connue à ce jour. En production, ce service utiliserait l'API officielle Have I Been Pwned pour un résultat réel.`);
+      }
+
+      checkEmailBtn.disabled = false;
+      checkEmailBtn.textContent = 'Vérifier cette adresse';
+      scanner.classList.remove('scanning');
+    }, 900);
+  });
+
+  function showResult(el, type, title, text){
+    el.className = `result show ${type}`;
+    el.innerHTML = `<div class="result-head">${title}</div><p>${text}</p>`;
+  }
+
+  /* ---------- Social platforms checklist ---------- */
+  const platforms = [
+    {
+      id: 'instagram', name: 'Instagram', initials: 'IG', color: '#E1306C',
+      items: [
+        'Double authentification (2FA) activée',
+        'Mot de passe unique, différent des autres comptes',
+        'E-mail et téléphone de récupération à jour',
+        'Sessions actives vérifiées (Paramètres > Sécurité > Activité de connexion)',
+        'Compte privé ou visibilité des infos personnelles vérifiée'
+      ]
+    },
+    {
+      id: 'facebook', name: 'Facebook', initials: 'FB', color: '#1877F2',
+      items: [
+        'Double authentification (2FA) activée',
+        'Mot de passe unique, différent des autres comptes',
+        'Contacts de confiance configurés',
+        'Sessions actives vérifiées',
+        'Applications tierces connectées passées en revue'
+      ]
+    },
+    {
+      id: 'tiktok', name: 'TikTok', initials: 'TT', color: '#69C9D0',
+      items: [
+        'Double authentification (2FA) activée',
+        'Mot de passe unique, différent des autres comptes',
+        'Compte privé si souhaité',
+        'Appareils connectés vérifiés'
+      ]
+    },
+    {
+      id: 'whatsapp', name: 'WhatsApp', initials: 'WA', color: '#25D366',
+      items: [
+        'Vérification en deux étapes activée (code PIN)',
+        'Confirmation de lecture / dernière connexion réglées selon préférence',
+        'Appareils liés (WhatsApp Web) vérifiés',
+        'Méfiance face aux liens reçus par message'
+      ]
+    },
+    {
+      id: 'snapchat', name: 'Snapchat', initials: 'SC', color: '#FFFC00',
+      items: [
+        'Double authentification (2FA) activée',
+        'Mot de passe unique, différent des autres comptes',
+        '"Qui peut me contacter" réglé sur Amis uniquement'
+      ]
+    }
+  ];
+
+  const platformList = document.getElementById('platformList');
+
+  platforms.forEach(p => {
+    state.socialChecks[p.id] = new Set();
+
+    const el = document.createElement('div');
+    el.className = 'platform';
+    el.innerHTML = `
+      <div class="platform-head">
+        <div class="platform-name">
+          <div class="platform-icon" style="background:${p.color}22; color:${p.color}; border:1px solid ${p.color}55;">${p.initials}</div>
+          ${p.name}
+        </div>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span class="platform-progress" id="progress-${p.id}">0 / ${p.items.length}</span>
+          <span class="chevron">▾</span>
+        </div>
+      </div>
+      <div class="platform-items">
+        ${p.items.map((item, i) => `
+          <label>
+            <input type="checkbox" data-platform="${p.id}" data-index="${i}">
+            ${item}
+          </label>
+        `).join('')}
+      </div>
+    `;
+    platformList.appendChild(el);
+
+    el.querySelector('.platform-head').addEventListener('click', () => {
+      el.classList.toggle('open');
+    });
+
+    el.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const set = state.socialChecks[p.id];
+        const idx = parseInt(cb.dataset.index, 10);
+        if(cb.checked) set.add(idx); else set.delete(idx);
+
+        const progressEl = document.getElementById(`progress-${p.id}`);
+        progressEl.textContent = `${set.size} / ${p.items.length}`;
+        progressEl.classList.toggle('complete', set.size === p.items.length);
+
+        computeScore();
+      });
+    });
+  });
+
+  /* ---------- Link analyzer ---------- */
+  const checkLinkBtn = document.getElementById('checkLinkBtn');
+  const linkInput = document.getElementById('linkInput');
+  const linkResult = document.getElementById('linkResult');
+  const linkPanel = document.getElementById('linkPanel');
+
+  const SUSPICIOUS_TLDS = ['.tk', '.ml', '.ga', '.cf', '.gq', '.xyz', '.top', '.click', '.work'];
+  const URL_SHORTENERS = ['bit.ly', 'tinyurl.com', 'goo.gl', 't.co', 'is.gd', 'cutt.ly', 'rb.gy', 'shorturl.at'];
+  const BRAND_KEYWORDS = ['instagram', 'facebook', 'whatsapp', 'paypal', 'apple', 'google', 'microsoft', 'netflix', 'amazon', 'bank', 'banque'];
+
+  checkLinkBtn.addEventListener('click', () => {
+    const raw = linkInput.value.trim();
+    if(!raw){
+      showResult(linkResult, 'info', '⚠ Entre un lien', 'Le champ est vide pour le moment.');
+      return;
+    }
+
+    checkLinkBtn.disabled = true;
+    checkLinkBtn.textContent = 'Analyse en cours...';
+    linkPanel.classList.add('scanning');
+
+    setTimeout(() => {
+      const signals = analyzeLink(raw);
+      renderLinkSignals(signals, raw);
+      state.linksChecked++;
+      computeScore();
+
+      checkLinkBtn.disabled = false;
+      checkLinkBtn.textContent = 'Analyser ce lien';
+      linkPanel.classList.remove('scanning');
+    }, 700);
+  });
+
+  function analyzeLink(raw){
+    const signals = [];
+    let url;
+    let hostname = '';
+
+    try{
+      url = new URL(raw.includes('://') ? raw : 'https://' + raw);
+      hostname = url.hostname.toLowerCase();
+    } catch(e){
+      signals.push({ flag: true, text: 'Le format de ce lien est invalide ou incomplet. Vérifie qu\'il commence par http(s):// et qu\'il ne contient pas d\'espaces.' });
+      return signals;
+    }
+
+    // HTTPS check
+    if(url.protocol !== 'https:'){
+      signals.push({ flag: true, text: 'Ce lien n\'utilise pas HTTPS. La connexion n\'est pas chiffrée — évite d\'y entrer des informations.' });
+    } else {
+      signals.push({ flag: false, text: 'Le lien utilise HTTPS (connexion chiffrée).' });
+    }
+
+    // Shortener
+    if(URL_SHORTENERS.some(s => hostname.includes(s))){
+      signals.push({ flag: true, text: 'Ce lien passe par un raccourcisseur d\'URL, ce qui cache la vraie destination. Méfiance, surtout si tu ne connais pas l\'expéditeur.' });
+    }
+
+    // Suspicious TLD
+    if(SUSPICIOUS_TLDS.some(tld => hostname.endsWith(tld))){
+      signals.push({ flag: true, text: `L'extension de domaine (${hostname.slice(hostname.lastIndexOf('.'))}) est souvent utilisée pour des sites gratuits liés au phishing. Reste vigilant.` });
+    }
+
+    // Brand impersonation check: brand name in subdomain/path but not in the actual domain
+    const domainParts = hostname.split('.');
+    const mainDomain = domainParts.length >= 2 ? domainParts[domainParts.length - 2] : hostname;
+
+    const mentionedBrand = BRAND_KEYWORDS.find(b => hostname.includes(b));
+    if(mentionedBrand && !mainDomain.includes(mentionedBrand)){
+      signals.push({ flag: true, text: `Le nom "${mentionedBrand}" apparaît dans l'adresse, mais ne correspond pas au domaine principal (${mainDomain}). C'est une technique classique d'usurpation de marque.` });
+    }
+
+    // Excessive subdomains
+    if(domainParts.length > 4){
+      signals.push({ flag: true, text: 'Ce lien contient un nombre inhabituel de sous-domaines, une technique parfois utilisée pour tromper sur la vraie destination.' });
+    }
+
+    // @ symbol trick
+    if(raw.includes('@')){
+      signals.push({ flag: true, text: 'Ce lien contient un symbole "@", qui peut être utilisé pour cacher la vraie destination après le symbole.' });
+    }
+
+    // IP address as host
+    if(/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)){
+      signals.push({ flag: true, text: 'Ce lien pointe directement vers une adresse IP plutôt qu\'un nom de domaine, ce qui est rare pour un site légitime.' });
+    }
+
+    if(signals.filter(s => s.flag).length === 0){
+      signals.push({ flag: false, text: 'Aucun signal d\'alerte évident détecté dans la structure du lien.' });
+    }
+
+    return signals;
+  }
+
+  function renderLinkSignals(signals, raw){
+    const flags = signals.filter(s => s.flag).length;
+
+    let headType, headTitle;
+    if(flags === 0){
+      headType = 'safe'; headTitle = '✓ Aucun signal d\'alerte majeur';
+    } else if(flags <= 1){
+      headType = 'info'; headTitle = '⚠ Un point à vérifier';
+    } else {
+      headType = 'danger'; headTitle = `⚠ ${flags} signaux d'alerte détectés`;
+    }
+
+    linkResult.className = `result show ${headType}`;
+    linkResult.innerHTML = `
+      <div class="result-head">${headTitle}</div>
+      <p>Cette analyse est basée uniquement sur la structure du lien, sans le visiter. Elle ne remplace pas ta vigilance : en cas de doute, ne clique pas et contacte l'expéditeur par un autre moyen.</p>
+      <div class="signal-list">
+        ${signals.map(s => `
+          <div class="signal ${s.flag ? 'flag' : 'ok'}">
+            <span class="icon">${s.flag ? '⚠' : '✓'}</span>
+            <span>${s.text}</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  /* ---------- Password generator ---------- */
+  const lenSlider = document.getElementById('lenSlider');
+  const lenVal = document.getElementById('lenVal');
+  const genOutput = document.getElementById('genOutput');
+  const genBtn = document.getElementById('genBtn');
+  const copyBtn = document.getElementById('copyBtn');
+  const strengthFill = document.getElementById('strengthFill');
+  const strengthLabel = document.getElementById('strengthLabel');
+
+  lenSlider.addEventListener('input', () => lenVal.textContent = lenSlider.value);
+
+  function generatePassword(){
+    const len = parseInt(lenSlider.value, 10);
+    const useUpper = document.getElementById('optUpper').checked;
+    const useLower = document.getElementById('optLower').checked;
+    const useNum = document.getElementById('optNum').checked;
+    const useSym = document.getElementById('optSym').checked;
+
+    const sets = [];
+    if(useLower) sets.push('abcdefghijklmnopqrstuvwxyz');
+    if(useUpper) sets.push('ABCDEFGHIJKLMNOPQRSTUVWXYZ');
+    if(useNum) sets.push('0123456789');
+    if(useSym) sets.push('!@#$%^&*()-_=+[]{}');
+
+    if(sets.length === 0){
+      genOutput.textContent = 'Sélectionne au moins une option';
+      return;
+    }
+
+    const all = sets.join('');
+    const randomValues = new Uint32Array(len);
+    crypto.getRandomValues(randomValues);
+
+    let result = '';
+    sets.forEach((set, i) => {
+      result += set[randomValues[i] % set.length];
+    });
+    for(let i = sets.length; i < len; i++){
+      result += all[randomValues[i] % all.length];
+    }
+
+    result = result.split('').sort(() => Math.random() - 0.5).join('');
+
+    genOutput.textContent = result;
+    updateStrength(result, sets.length);
+  }
+
+  function updateStrength(pw, varietyCount){
+    const len = pw.length;
+    let score = 0;
+    if(len >= 8) score++;
+    if(len >= 12) score++;
+    if(len >= 16) score++;
+    score += (varietyCount - 1);
+
+    const max = 6;
+    const pct = Math.min(100, (score/max) * 100);
+
+    let color = 'var(--danger)';
+    let label = 'Faible';
+    if(pct >= 80){ color = 'var(--accent)'; label = 'Excellent'; }
+    else if(pct >= 55){ color = 'var(--warn)'; label = 'Correct'; }
+
+    strengthFill.style.width = pct + '%';
+    strengthFill.style.background = color;
+    strengthLabel.textContent = label;
+  }
+
+  genBtn.addEventListener('click', generatePassword);
+
+  copyBtn.addEventListener('click', () => {
+    const text = genOutput.textContent;
+    if(text && text !== 'Clique pour générer'){
+      navigator.clipboard.writeText(text);
+      copyBtn.textContent = 'Copié !';
+      setTimeout(() => copyBtn.textContent = 'Copier', 1200);
+    }
+  });
+
+  /* ---------- Exposure scanner ---------- */
+  const scanExposureBtn = document.getElementById('scanExposureBtn');
+  const exposureResult = document.getElementById('exposureResult');
+  const exposurePanel = document.getElementById('exposurePanel');
+
+  scanExposureBtn.addEventListener('click', async () => {
+    scanExposureBtn.disabled = true;
+    scanExposureBtn.textContent = 'Analyse en cours...';
+    exposurePanel.classList.add('scanning');
+    exposureResult.style.display = 'block';
+
+    // Show loading state
+    ['expIpVal','expCityVal','expIspVal','expVpnVal'].forEach(id => {
+      const el = document.getElementById(id);
+      el.textContent = 'Chargement...';
+      el.className = 'exp-value loading';
+    });
+
+    try {
+      // Use ip-api.com free JSON endpoint (no key needed, 45 req/min)
+      const res = await fetch('http://ip-api.com/json/?fields=status,message,country,countryCode,regionName,city,isp,org,query,proxy,hosting');
+      const data = await res.json();
+
+      if(data.status === 'success'){
+        // IP
+        const ipEl = document.getElementById('expIpVal');
+        ipEl.textContent = data.query || '—';
+        ipEl.className = 'exp-value';
+        document.getElementById('expIp').classList.add('loaded');
+
+        // City + Country
+        const cityEl = document.getElementById('expCityVal');
+        const location = [data.city, data.regionName, data.country].filter(Boolean).join(', ');
+        cityEl.textContent = location || '—';
+        cityEl.className = 'exp-value';
+        document.getElementById('expCity').classList.add('loaded');
+
+        // ISP
+        const ispEl = document.getElementById('expIspVal');
+        ispEl.textContent = data.isp || data.org || '—';
+        ispEl.className = 'exp-value';
+        document.getElementById('expIsp').classList.add('loaded');
+
+        // VPN / Proxy
+        const vpnEl = document.getElementById('expVpnVal');
+        const isVpn = data.proxy || data.hosting;
+        vpnEl.textContent = isVpn ? 'Oui — VPN/Proxy détecté' : 'Non détecté';
+        vpnEl.className = isVpn ? 'exp-value safe' : 'exp-value';
+        document.getElementById('expVpn').classList.add('loaded');
+
+        // Advice
+        const adviceEl = document.getElementById('expAdviceText');
+        if(isVpn){
+          adviceEl.innerHTML = `Ton trafic semble passer par un VPN ou proxy — ta vraie localisation est masquée. C'est une bonne pratique pour protéger ta vie privée sur des réseaux publics.`;
+          document.getElementById('expAdvice').className = 'result show safe';
+        } else {
+          adviceEl.innerHTML = `Ton adresse IP <strong>${data.query}</strong> révèle que tu es à <strong>${data.city || 'localisation inconnue'}, ${data.country}</strong>. N'importe quel site que tu visites peut voir ces informations. Si tu utilises des réseaux Wi-Fi publics (café, hôtel...), un VPN te protège en masquant ta vraie localisation.`;
+          document.getElementById('expAdvice').className = 'result show info';
+        }
+
+      } else {
+        throw new Error('API error');
+      }
+
+    } catch(err) {
+      // Fallback: try alternative API
+      try {
+        const res2 = await fetch('https://ipapi.co/json/');
+        const data2 = await res2.json();
+
+        document.getElementById('expIpVal').textContent = data2.ip || '—';
+        document.getElementById('expIpVal').className = 'exp-value';
+        const loc = [data2.city, data2.region, data2.country_name].filter(Boolean).join(', ');
+        document.getElementById('expCityVal').textContent = loc || '—';
+        document.getElementById('expCityVal').className = 'exp-value';
+        document.getElementById('expIspVal').textContent = data2.org || '—';
+        document.getElementById('expIspVal').className = 'exp-value';
+        document.getElementById('expVpnVal').textContent = 'Non déterminé';
+        document.getElementById('expVpnVal').className = 'exp-value';
+
+        ['expIp','expCity','expIsp','expVpn'].forEach(id => document.getElementById(id).classList.add('loaded'));
+
+        document.getElementById('expAdviceText').innerHTML = `Ton adresse IP <strong>${data2.ip}</strong> révèle que tu es à <strong>${data2.city || '—'}, ${data2.country_name}</strong>. Ces informations sont visibles par tous les sites que tu visites.`;
+
+      } catch(err2) {
+        ['expIpVal','expCityVal','expIspVal','expVpnVal'].forEach(id => {
+          document.getElementById(id).textContent = 'Indisponible';
+          document.getElementById(id).className = 'exp-value';
+        });
+        document.getElementById('expAdviceText').textContent = 'Impossible de contacter le service de géolocalisation. Vérifie ta connexion internet et réessaie.';
+      }
+    } finally {
+      scanExposureBtn.disabled = false;
+      scanExposureBtn.textContent = 'Relancer l\'analyse';
+      exposurePanel.classList.remove('scanning');
+    }
+  });
+
+  /* ---------- Init ---------- */
+  generatePassword();
+  computeScore();
+</script>
+
+</body>
+</html>
